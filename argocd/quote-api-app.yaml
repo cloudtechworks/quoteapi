@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: quote-api
+  namespace: argocd
+spec:
+  project: quote-api
+  source:
+    repoURL: 'https://github.com/cloudtechworks/quoteapi'
+    targetRevision: main
+    path: k8s/quoteapi
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: quote-api
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability
+  namespace: argocd
+spec:
+  project: observability
+  source:
+    repoURL: 'https://github.com/cloudtechworks/quoteapi'
+    targetRevision: main
+    path: k8s/observability
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
