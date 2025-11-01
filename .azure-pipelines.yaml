@@ -1,0 +1,85 @@
+trigger:
+  batch: true
+  branches:
+    include: 
+    - main
+
+parameters:
+  - name: infraSubscription #Used serviceconnection to deploy the INFRA
+    type: string
+    default: ''
+  - name: appSubscription #Used service connection to deploy the application (likely different)
+    type: string
+    default: ''
+  - name: acrName
+    type: string
+    default: 'quoteapiacr123'
+  - name: appName
+    type: string
+    default: 'quote-api'
+
+stages:
+  - stage: Terraform_Plan
+    displayName: "Terraform Plan"
+    jobs:
+      - job: Plan_Infra
+        displayName: "Terraform Plan Infra"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - task: AzureCLI@2
+            displayName: "Terraform Init & Plan"
+            inputs:
+              azureSubscription: ${{ parameters.infraSubscription }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                cd ./infra
+                terraform init
+                terraform plan -out=tfplan
+                terraform show tfplan  # prints human-readable plan to logs
+          - publish: ./infra/tfplan
+            artifact: tfplan-artifact
+
+  - stage: Terraform_Apply
+    displayName: "Terraform Apply"
+    dependsOn: Terraform_Plan
+    condition: succeeded()
+    jobs:
+      - deployment: Apply_Infra
+        displayName: "Terraform Apply Infra"
+        environment: "Production"  # <-- Set up your environment in Azure DevOps to ensure approval gate is inplace
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: tfplan-artifact
+                - task: AzureCLI@2
+                  displayName: "Terraform Apply"
+                  inputs:
+                    azureSubscription: ${{ parameters.infraSubscription }}
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      cd ./infra
+                      terraform apply tfplan
+  - stage: Build_and_Update_QuotaAPI_App
+    displayName: Build and Update QuotaAPI App
+    jobs:
+      - job:
+        steps:
+          - checkout: self
+          - task: AzureCLI@2
+            displayName: Checking if version of image azure and parameter file are the same
+            inputs:
+              visibleAzLogin: false
+              azureSubscription: ${{ parameters.appSubscription }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                docker build -t ${{ parameters.appName }} .
+                az acr login --name ${{ parameters.acrName }}
+                docker tag  ${{ parameters.appName }} ${{ parameters.acrName }}.azurecr.io/${{ parameters.appName }}:latest
+                docker push ${{ parameters.acrName }}.azurecr.io/${{ parameters.appName }}:latest

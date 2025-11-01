@@ -1,0 +1,43 @@
+#Introduction
+This is a quick ReadMe/Overview of the application that is to-be-deployed alongside pipelines, infra and more
+
+Deploy the kubernetes cluster using the terraform deployment (can be in-pipeline; infra)
+Followed by building the image of the app and publishing it to the ACR (ADO pipeline) -> Also update tags on manifests in GitHub
+ArgoCD checks for changes to the app in the GIT repo and deploys them.
+
+App up and running, nothing too much
+
+
+Folder /app exists in ADO
+folder /k8s exists in github
+folder /infra exists in ADO (Deploy AKS)
+
+#Docker build commands for testing
+docker build -t quote-api .
+docker run -p 8080:8080 quote-api
+
+#Mac specific stuff to build AND push to acr
+docker buildx build --platform linux/amd64 -t quoteapiacr123.azurecr.io/quoteapi:latest .
+docker push quoteapiacr123.azurecr.io/quoteapi:latest
+
+#Pushing acr:
+az acr login --name quoteapiacr123
+docker tag quote-api quoteapiacr123.azurecr.io/quote-api:latest
+docker push quoteapiacr123.azurecr.io/quote-api:latest
+
+Tools to install/commands to execute
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+
+#Create all namespaces:
+kubectl create namespace observability
+kubectl create namespace quote-api
+kubectl create namespace argocd
+helm install argocd argo/argo-cd -n argocd
+kubectl port-forward svc/argocd-server -n argocd 8181:443 #Choosing 8181 as 8080 will be in use by the app and runs on the same node
+
+#if required
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 --decode
+
+Perform initial setup of the above using argocd shell/web interface
+Application deployments will go via IaC
